@@ -11,8 +11,10 @@ from dotenv import load_dotenv
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 load_dotenv(os.path.join(BASE_DIR, ".env"))
 
-# ✅ Global OpenAI client (auto-loads key from env)
-client = OpenAI()
+
+def get_openai_client():
+    """Lazy load OpenAI client to avoid reload/proxy issues."""
+    return OpenAI()
 
 
 async def generate_excel_questions(n: int = 5) -> List[Dict]:
@@ -20,6 +22,8 @@ async def generate_excel_questions(n: int = 5) -> List[Dict]:
     Generate Excel questions with increasing difficulty.
     Each question includes: id, text, type, expected_keywords, difficulty.
     """
+    client = get_openai_client()
+
     prompt = (
         f"Generate {n} Excel interview questions with increasing difficulty. "
         "Start from easy and move up to expert level. "

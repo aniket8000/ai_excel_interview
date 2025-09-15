@@ -17,6 +17,11 @@ if not OPENAI_API_KEY:
     raise RuntimeError("OPENAI_API_KEY not set in backend/.env")
 
 
+def get_openai_client():
+    """Lazy load OpenAI client to avoid reload/proxy issues."""
+    return OpenAI()
+
+
 def keyword_score(answer: str, expected_keywords: List[str]) -> float:
     """Deterministic keyword coverage score (0.0 - 1.0)."""
     if not expected_keywords:
@@ -31,7 +36,7 @@ async def _call_llm_system(prompt: str, expect_json: bool = True) -> Dict[str, A
     Call OpenAI ChatCompletion.
     If expect_json=True, enforce JSON parsing.
     """
-    client = OpenAI()  # reads OPENAI_API_KEY from env
+    client = get_openai_client()
 
     try:
         resp = await asyncio.to_thread(
