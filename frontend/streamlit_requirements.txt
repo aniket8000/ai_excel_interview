@@ -1,0 +1,22 @@
+# Frontend requirements for candidate app + admin panel
+
+# Streamlit for UI
+streamlit==1.25.0
+
+# Load environment variables
+python-dotenv==1.0.1
+
+# For calling backend APIs
+requests==2.31.0
+
+# For generating PDF reports
+reportlab==4.2.2
+
+# For charts and visualizations in admin panel
+matplotlib==3.7.2
+
+# For MongoDB queries (admin panel uses this)
+pymongo==4.6.1
+
+# For analytics & filtering
+pandas==2.0.3

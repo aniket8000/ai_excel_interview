@@ -1,0 +1,25 @@
+# Ignore all env files
+.env
+frontend/.env
+backend/.env
+
+# Ignore virtual environments
+venv/
+*/venv/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Streamlit cache
+.streamlit/
+
+# IDE / editor files
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
