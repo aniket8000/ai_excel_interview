@@ -4,6 +4,7 @@ import sys
 import requests
 import streamlit as st
 from dotenv import load_dotenv
+from requests.exceptions import Timeout, RequestException, HTTPError
 
 # 🔥 Add backend/app to Python path so we can reuse utils.py later (for admin panel)
 BASE_DIR = pathlib.Path(__file__).resolve().parents[1]
@@ -41,7 +42,11 @@ with st.form("start_form"):
             st.warning("Please enter your name")
         else:
             try:
-                resp = requests.post(f"{BACKEND_URL}/start", json={"candidate_name": name.strip()}, timeout=10)
+                resp = requests.post(
+                    f"{BACKEND_URL}/start",
+                    json={"candidate_name": name.strip()},
+                    timeout=120,  # ⏳ extended timeout
+                )
                 resp.raise_for_status()
                 data = resp.json()
 
@@ -56,8 +61,14 @@ with st.form("start_form"):
                 st.session_state["answer_key"] = "answer_area_1"
 
                 st.success("Interview started — answer the questions below")
+            except Timeout:
+                st.error("⚠️ Server took too long to respond while starting interview. Please try again.")
+            except HTTPError as e:
+                st.error(f"⚠️ HTTP error while starting interview: {e.response.text}")
+            except RequestException as e:
+                st.error(f"⚠️ Network error while starting interview: {e}")
             except Exception as e:
-                st.error(f"Could not start interview: {e}")
+                st.error(f"⚠️ Unexpected error: {e}")
 
 # Interview Flow
 if st.session_state.get("interview_id") and not st.session_state["finished"]:
@@ -83,7 +94,7 @@ if st.session_state.get("interview_id") and not st.session_state["finished"]:
             resp = requests.post(
                 f"{BACKEND_URL}/answer/{st.session_state['interview_id']}",
                 json={"answer": answer},
-                timeout=30,
+                timeout=120,  # ⏳ extended timeout
             )
             resp.raise_for_status()
             data = resp.json()
@@ -104,8 +115,14 @@ if st.session_state.get("interview_id") and not st.session_state["finished"]:
                 st.session_state["report"] = data.get("report")
                 st.experimental_rerun()
 
+        except Timeout:
+            st.error("⚠️ Server took too long to evaluate your answer. Please try again.")
+        except HTTPError as e:
+            st.error(f"⚠️ HTTP error: {e.response.text}")
+        except RequestException as e:
+            st.error(f"⚠️ Network error: {e}")
         except Exception as e:
-            st.error("Failed to submit answer: " + str(e))
+            st.error(f"⚠️ Unexpected error: {e}")
 
 # Final Thank You Page (no PDF)
 if st.session_state.get("finished"):

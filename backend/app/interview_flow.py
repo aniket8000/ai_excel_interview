@@ -1,4 +1,3 @@
-from openai import OpenAI
 import os
 import json
 import asyncio
@@ -6,15 +5,14 @@ from datetime import datetime
 import uuid
 from typing import Dict, List, Optional
 from dotenv import load_dotenv
+import openai  # ✅ use functional API
 
 # Load backend/.env
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 load_dotenv(os.path.join(BASE_DIR, ".env"))
 
-
-def get_openai_client():
-    """Lazy load OpenAI client to avoid reload/proxy issues."""
-    return OpenAI()
+# Configure API key once
+openai.api_key = os.getenv("OPENAI_API_KEY")
 
 
 async def generate_excel_questions(n: int = 5) -> List[Dict]:
@@ -22,7 +20,6 @@ async def generate_excel_questions(n: int = 5) -> List[Dict]:
     Generate Excel questions with increasing difficulty.
     Each question includes: id, text, type, expected_keywords, difficulty.
     """
-    client = get_openai_client()
 
     prompt = (
         f"Generate {n} Excel interview questions with increasing difficulty. "
@@ -36,7 +33,7 @@ async def generate_excel_questions(n: int = 5) -> List[Dict]:
 
     try:
         resp = await asyncio.to_thread(
-            client.chat.completions.create,
+            openai.chat.completions.create,
             model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": "You are an AI interviewer. Always reply in valid JSON."},
@@ -52,43 +49,18 @@ async def generate_excel_questions(n: int = 5) -> List[Dict]:
         return json.loads(text)
 
     except Exception as e:
-        print("⚠️ Question generation failed, fallback:", e)
+        print("⚠️ Question generation failed, fallback used. Error:", e)
         return [
-            {
-                "id": "fallback_q1",
-                "text": "Explain the difference between relative and absolute references in Excel.",
-                "type": "theory",
-                "expected_keywords": ["relative", "absolute", "cell reference", "dollar sign"],
-                "difficulty": "easy",
-            },
-            {
-                "id": "fallback_q2",
-                "text": "Write a formula using VLOOKUP to fetch employee salary from a table.",
-                "type": "practical",
-                "expected_keywords": ["VLOOKUP", "formula", "table"],
-                "difficulty": "medium",
-            },
-            {
-                "id": "fallback_q3",
-                "text": "How would you handle errors in Excel formulas using IFERROR?",
-                "type": "theory",
-                "expected_keywords": ["IFERROR", "formula", "error handling"],
-                "difficulty": "hard",
-            },
-            {
-                "id": "fallback_q4",
-                "text": "Describe how you would create and analyze a Pivot Table for sales data.",
-                "type": "scenario",
-                "expected_keywords": ["Pivot Table", "rows", "columns", "filters"],
-                "difficulty": "very hard",
-            },
-            {
-                "id": "fallback_q5",
-                "text": "Optimize a complex Excel sheet with multiple formulas to improve performance.",
-                "type": "scenario",
-                "expected_keywords": ["optimization", "formulas", "Excel performance"],
-                "difficulty": "expert",
-            }
+            {"id": "fallback_q1", "text": "Explain relative vs absolute references.", "type": "theory",
+             "expected_keywords": ["relative", "absolute", "cell reference"], "difficulty": "easy"},
+            {"id": "fallback_q2", "text": "Write a VLOOKUP to fetch employee salary.", "type": "practical",
+             "expected_keywords": ["VLOOKUP", "formula", "table"], "difficulty": "medium"},
+            {"id": "fallback_q3", "text": "How do you handle errors with IFERROR?", "type": "theory",
+             "expected_keywords": ["IFERROR", "formula", "error"], "difficulty": "hard"},
+            {"id": "fallback_q4", "text": "Describe how to create and analyze a Pivot Table.", "type": "scenario",
+             "expected_keywords": ["Pivot Table", "rows", "columns"], "difficulty": "very hard"},
+            {"id": "fallback_q5", "text": "Optimize a slow Excel sheet with many formulas.", "type": "scenario",
+             "expected_keywords": ["optimization", "Excel performance"], "difficulty": "expert"},
         ]
 
 
@@ -125,7 +97,6 @@ class InterviewState:
             "text": text,
             "ts": datetime.utcnow(),
         })
-
         if role == "candidate" and self.last_question:
             self.question_answer_pairs.append((self.last_question, text))
 

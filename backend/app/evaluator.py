@@ -4,22 +4,18 @@ import pathlib
 import asyncio
 import json
 from dotenv import load_dotenv
-from openai import OpenAI
+import openai  # ✅ use functional API
 from typing import Dict, List, Any
 
 # load backend/.env
 BASE_DIR = pathlib.Path(__file__).resolve().parents[1]
 load_dotenv(dotenv_path=os.path.join(BASE_DIR, ".env"))
 
-# Defensive check
+# Configure once
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 if not OPENAI_API_KEY:
-    raise RuntimeError("OPENAI_API_KEY not set in backend/.env")
-
-
-def get_openai_client():
-    """Lazy load OpenAI client to avoid reload/proxy issues."""
-    return OpenAI()
+    raise RuntimeError("❌ OPENAI_API_KEY not set in backend/.env or Render env variables.")
+openai.api_key = OPENAI_API_KEY
 
 
 def keyword_score(answer: str, expected_keywords: List[str]) -> float:
@@ -32,15 +28,10 @@ def keyword_score(answer: str, expected_keywords: List[str]) -> float:
 
 
 async def _call_llm_system(prompt: str, expect_json: bool = True) -> Dict[str, Any]:
-    """
-    Call OpenAI ChatCompletion.
-    If expect_json=True, enforce JSON parsing.
-    """
-    client = get_openai_client()
-
+    """Call OpenAI ChatCompletion and parse JSON if required."""
     try:
         resp = await asyncio.to_thread(
-            client.chat.completions.create,
+            openai.chat.completions.create,
             model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": "You are an AI assistant."},
@@ -52,95 +43,69 @@ async def _call_llm_system(prompt: str, expect_json: bool = True) -> Dict[str, A
 
         text = resp.choices[0].message.content.strip()
 
-        # remove ``` fences if model added them
         if text.startswith("```"):
             text = text.strip("`")
             if text.lower().startswith("json"):
                 text = text[4:].strip()
 
-        if expect_json:
-            return json.loads(text)
-        else:
-            return {"raw": text}
+        return json.loads(text) if expect_json else {"raw": text}
 
     except Exception as e:
         return {"score": None, "reasoning": f"LLM error: {e}", "suggestions": []}
 
 
 async def plagiarism_check(answer: str) -> Dict[str, Any]:
-    """
-    Detect if answer looks AI-generated or copied.
-    Returns {status: "original" | "suspicious", explanation: str}.
-    """
+    """Detect if answer looks AI-generated or copied."""
     if not answer.strip():
         return {"status": "empty", "explanation": "No answer provided."}
 
     prompt = (
-        f"Analyze the following text:\n\n{answer}\n\n"
-        "Classify if the response is:\n"
+        f"Analyze this text:\n\n{answer}\n\n"
+        "Classify as:\n"
         "- 'original': written by a human in their own words.\n"
-        "- 'suspicious': likely AI-generated, copied, or too generic.\n\n"
-        "Return a JSON object with fields:\n"
-        " - status (original or suspicious)\n"
-        " - explanation (short reason)"
+        "- 'suspicious': likely AI-generated or copied.\n\n"
+        "Return JSON {status, explanation}"
     )
 
     result = await _call_llm_system(prompt, expect_json=True)
-
-    status = result.get("status", "unknown")
-    explanation = result.get("explanation", "No explanation provided")
-
-    return {"status": status, "explanation": explanation}
+    return {
+        "status": result.get("status", "unknown"),
+        "explanation": result.get("explanation", "No explanation provided")
+    }
 
 
 async def evaluate_answer(question: Dict[str, Any], answer: str) -> Dict[str, Any]:
-    """
-    Combined evaluation:
-    - deterministic keyword baseline
-    - LLM qualitative judgement
-    - plagiarism/AI-detection check
-    """
+    """Evaluate candidate's answer with keywords + LLM + plagiarism check."""
     expected_keywords = question.get("expected_keywords", []) or []
     kw = keyword_score(answer, expected_keywords)
 
     prompt = (
         f"Question: {question.get('text')}\n\n"
-        f"Expected keywords / concepts: {expected_keywords}\n\n"
-        f"Candidate answer: {answer}\n\n"
-        "Provide a JSON object with fields:\n"
-        " - score: a number between 0 and 1 (float)\n"
-        " - reasoning: short explanation (1-2 sentences)\n"
-        " - suggestions: list of 1-3 concise improvement suggestions\n\n"
-        "Be objective and concise."
+        f"Expected: {expected_keywords}\n\n"
+        f"Answer: {answer}\n\n"
+        "Return JSON {score: float 0-1, reasoning: str, suggestions: [..]}"
     )
 
     llm_result = await _call_llm_system(prompt, expect_json=True)
 
     llm_score = llm_result.get("score")
     try:
-        if llm_score is None:
-            llm_score = kw
-        else:
-            llm_score = float(llm_score)
-            llm_score = max(0.0, min(1.0, llm_score))
+        llm_score = float(llm_score) if llm_score is not None else kw
+        llm_score = max(0.0, min(1.0, llm_score))
     except Exception:
         llm_score = kw
 
     final_score = round(0.4 * kw + 0.6 * llm_score, 3)
 
-    reasoning = llm_result.get("reasoning") or f"Keyword coverage baseline: {kw}"
-    suggestions = llm_result.get("suggestions") or []
-
-    # 🔍 Run plagiarism check
     plagiarism_result = await plagiarism_check(answer)
 
     return {
         "question_id": question.get("id"),
-        "question_text": question.get("text"),        # ✅ store full question
-        "difficulty": question.get("difficulty", ""), # ✅ store difficulty (easy/medium/hard)
-        "answer": answer,                             # ✅ store user answer
+        "question_text": question.get("text"),
+        "difficulty": question.get("difficulty", ""),
+        "answer": answer,
         "score": final_score,
-        "reasoning": reasoning if isinstance(reasoning, str) else str(reasoning),
-        "suggestions": suggestions,
-        "plagiarism_check": plagiarism_result,        # ✅ store plagiarism
+        "reasoning": llm_result.get("reasoning") or f"Keyword baseline: {kw}",
+        "suggestions": llm_result.get("suggestions") or [],
+        "plagiarism_check": plagiarism_result,
     }
