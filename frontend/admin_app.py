@@ -50,7 +50,7 @@ if not st.session_state["admin_authenticated"]:
 
 # ========== FETCH REPORTS ==========
 try:
-    resp = requests.get(f"{BACKEND_URL}/admin/reports")
+    resp = requests.get(f"{BACKEND_URL}/admin/reports", timeout=120)  # ⏳ extended timeout
     resp.raise_for_status()
     reports = resp.json()
 except Exception as e:

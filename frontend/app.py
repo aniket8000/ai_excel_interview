@@ -50,7 +50,6 @@ with st.form("start_form"):
                 resp.raise_for_status()
                 data = resp.json()
 
-                # Reset state
                 st.session_state["interview_id"] = data["id"]
                 st.session_state["last_question"] = data.get("question") or "No question received"
                 st.session_state["candidate_name"] = name.strip()
@@ -76,7 +75,6 @@ if st.session_state.get("interview_id") and not st.session_state["finished"]:
     st.write(f"**Candidate:** {st.session_state.get('candidate_name')}")
     st.write(f"**Progress:** {st.session_state.get('progress')}")
 
-    # 🔥 Parse progress for percentage bar
     try:
         current, total = map(int, st.session_state["progress"].split("/"))
         percent = int((current / total) * 100)
@@ -86,7 +84,6 @@ if st.session_state.get("interview_id") and not st.session_state["finished"]:
 
     st.write(f"**Question:** {st.session_state.get('last_question')}")
 
-    # Answer input field
     answer = st.text_area("Your answer", height=160, key=st.session_state["answer_key"])
 
     if st.button("Submit Answer"):
@@ -99,18 +96,15 @@ if st.session_state.get("interview_id") and not st.session_state["finished"]:
             resp.raise_for_status()
             data = resp.json()
 
-            # Save evaluation internally but don’t show it
             eval_block = data.get("evaluation", {})
             st.session_state["evaluations"].append(eval_block)
 
-            # If more questions remain → auto jump
             if "next_question" in data:
                 st.session_state["last_question"] = data["next_question"]
                 st.session_state["progress"] = data.get("progress", "")
                 st.session_state["answer_key"] = f"answer_area_{st.session_state['progress']}"
                 st.experimental_rerun()
             else:
-                # Finished interview
                 st.session_state["finished"] = True
                 st.session_state["report"] = data.get("report")
                 st.experimental_rerun()
@@ -124,15 +118,13 @@ if st.session_state.get("interview_id") and not st.session_state["finished"]:
         except Exception as e:
             st.error(f"⚠️ Unexpected error: {e}")
 
-# Final Thank You Page (no PDF)
+# Final Thank You Page
 if st.session_state.get("finished"):
     st.markdown("## Interview Complete ✅")
     st.write("🎉 Thank you for completing the interview! Your responses have been recorded.")
 
-    # Reset
     if st.button("🔄 Start New Interview"):
         for key in list(st.session_state.keys()):
             del st.session_state[key]
-        # 🔥 Reset name field
         st.session_state["candidate_name_input"] = ""
         st.experimental_rerun()

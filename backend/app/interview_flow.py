@@ -20,7 +20,6 @@ async def generate_excel_questions(n: int = 5) -> List[Dict]:
     Generate Excel questions with increasing difficulty.
     Each question includes: id, text, type, expected_keywords, difficulty.
     """
-
     prompt = (
         f"Generate {n} Excel interview questions with increasing difficulty. "
         "Start from easy and move up to expert level. "
@@ -33,18 +32,21 @@ async def generate_excel_questions(n: int = 5) -> List[Dict]:
 
     try:
         resp = await asyncio.to_thread(
-            openai.chat.completions.create,
+            openai.ChatCompletion.create,  # ✅ fixed API call
             model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": "You are an AI interviewer. Always reply in valid JSON."},
                 {"role": "user", "content": prompt},
             ],
             temperature=0.7,
+            max_tokens=800,
         )
 
-        text = resp.choices[0].message.content.strip()
+        text = resp.choices[0].message["content"].strip()
         if text.startswith("```"):
-            text = text.strip("`").replace("json", "", 1).strip()
+            text = text.strip("`")
+            if text.lower().startswith("json"):
+                text = text[4:].strip()
 
         return json.loads(text)
 

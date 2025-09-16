@@ -1,4 +1,3 @@
-# backend/app/evaluator.py
 import os
 import pathlib
 import asyncio
@@ -31,7 +30,7 @@ async def _call_llm_system(prompt: str, expect_json: bool = True) -> Dict[str, A
     """Call OpenAI ChatCompletion and parse JSON if required."""
     try:
         resp = await asyncio.to_thread(
-            openai.chat.completions.create,
+            openai.ChatCompletion.create,  # ✅ fixed API call
             model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": "You are an AI assistant."},
@@ -41,7 +40,7 @@ async def _call_llm_system(prompt: str, expect_json: bool = True) -> Dict[str, A
             max_tokens=400,
         )
 
-        text = resp.choices[0].message.content.strip()
+        text = resp.choices[0].message["content"].strip()
 
         if text.startswith("```"):
             text = text.strip("`")
